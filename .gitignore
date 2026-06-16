@@ -1,0 +1,72 @@
+# ---------- macOS ----------
+.DS_Store
+._*
+
+# ---------- IDEs / editors ----------
+.idea/
+.vscode/
+*.iml
+*.ipr
+*.iws
+
+# ---------- Logs ----------
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# ---------- Node (backend + portal) ----------
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+.eslintcache
+.cache/
+coverage/
+
+# Build outputs
+dist/
+build/
+.vite/
+.next/
+out/
+
+# ---------- Env files (never commit real secrets) ----------
+.env
+.env.*
+!.env.example
+
+# ---------- Android / Gradle ----------
+# Local SDK path + the demo-app API key live here.
+local.properties
+
+# Gradle build outputs and caches
+.gradle/
+**/build/
+captures/
+
+# Android Studio / IntelliJ
+*.hprof
+.cxx/
+
+# APK / AAB / mapping outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+proguard/
+
+# Keystores
+*.jks
+*.keystore
+
+# NDK
+.externalNativeBuild/
+
+# ---------- Misc ----------
+*.swp
+*.swo
+*.bak
+*.tmp

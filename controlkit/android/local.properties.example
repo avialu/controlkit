@@ -1,0 +1,9 @@
+# Copy to local.properties (which is gitignored) and fill in.
+# Run `npm run seed` in backend/ — it prints the API keys you need.
+
+sdk.dir=/Users/you/Library/Android/sdk
+
+# ControlKit demo-app configuration (read by demo-app/build.gradle.kts)
+controlkit.apiKey=ck_REPLACE_ME
+controlkit.baseUrl=http://10.0.2.2:4000
+controlkit.env=production
