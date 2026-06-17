@@ -10,6 +10,9 @@ import com.controlkit.sdk.internal.toJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 
@@ -20,22 +23,41 @@ import org.json.JSONObject
  *   1. Host app calls [init] once, typically in Application.onCreate.
  *      The local cache (if any) is loaded synchronously so the first
  *      `isEnabled`/`getXxx` calls already see data.
- *   2. Host app (or the SDK itself) calls [fetch] / [refresh] to pull
- *      the latest config from the backend.
+ *   2. The SDK polls the backend in the background. Each successful fetch
+ *      bumps [configVersion], which Compose UIs can collect to recompose
+ *      automatically.
  *   3. Reads (`isEnabled`, `getString`, …) are pure in-memory lookups.
  */
 object ControlKit {
 
     private const val TAG = "ControlKit"
+    const val DEFAULT_REFRESH_INTERVAL_MS: Long = 15L * 60L * 1000L
 
     @Volatile private var initialized: Boolean = false
 
-    @Volatile private var document: ConfigDocument = ConfigDocument.EMPTY
+    /**
+     * Holds the latest config document. Wrapped in a StateFlow so the SDK
+     * can notify subscribers (Compose, lifecycle scopes) of new values.
+     */
+    private val _document = MutableStateFlow(ConfigDocument.EMPTY)
+
+    /**
+     * Public flow that fires every time the in-memory config changes.
+     * Compose code can do:
+     *
+     *   val version by ControlKit.configVersion.collectAsStateWithLifecycle()
+     *   val welcome = remember(version) { ControlKit.getString("welcome_text", "Hi") }
+     *
+     * to re-render whenever the SDK gets new data (manual fetch OR background poll).
+     */
+    private val _configVersion = MutableStateFlow(0)
+    val configVersion: StateFlow<Int> = _configVersion.asStateFlow()
+
     private var defaults: ControlKitDefaults = ControlKitDefaults()
 
     private lateinit var cache: ConfigCache
     private lateinit var network: NetworkClient
-    private val refresher = BackgroundRefresher()
+    private var refresher: BackgroundRefresher? = null
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -47,11 +69,13 @@ object ControlKit {
      * Initialise the SDK. Safe to call multiple times — subsequent calls are no-ops
      * unless [reset] was invoked first.
      *
-     * @param context     any Context; only the application context is retained.
-     * @param apiKey      the API key generated in the portal.
-     * @param environment must match the environment the API key was issued for.
-     * @param baseUrl     backend root, e.g. "http://10.0.2.2:4000" for the Android emulator.
-     * @param defaults    optional defaults used before the first successful fetch / cache load.
+     * @param context              any Context; only the application context is retained.
+     * @param apiKey               the API key generated in the portal.
+     * @param environment          must match the environment the API key was issued for.
+     * @param baseUrl              backend root, e.g. "http://10.0.2.2:4000" for the Android emulator.
+     * @param defaults             optional defaults used before the first successful fetch / cache load.
+     * @param refreshIntervalMillis how often the SDK should poll the backend in the background.
+     *                              Pass 0 to disable background polling. Defaults to 15 minutes.
      */
     @JvmStatic
     @JvmOverloads
@@ -61,6 +85,7 @@ object ControlKit {
         environment: String = "production",
         baseUrl: String,
         defaults: ControlKitDefaults = ControlKitDefaults(),
+        refreshIntervalMillis: Long = DEFAULT_REFRESH_INTERVAL_MS,
     ) {
         require(apiKey.isNotBlank()) { "apiKey must not be blank" }
         require(baseUrl.isNotBlank()) { "baseUrl must not be blank" }
@@ -71,11 +96,13 @@ object ControlKit {
         this.cache = ConfigCache(context, environment)
         this.network = NetworkClient(baseUrl = baseUrl, apiKey = apiKey, environment = environment)
 
-        cache.load()?.let { document = it }
+        cache.load()?.let { updateDocument(it) }
 
         initialized = true
 
-        refresher.start { runCatching { fetchInternal() } }
+        refresher = BackgroundRefresher(intervalMillis = refreshIntervalMillis).also {
+            it.start { runCatching { fetchInternal() } }
+        }
     }
 
     /** Forces a synchronous (suspend) fetch from the backend. Updates cache on success. */
@@ -95,7 +122,7 @@ object ControlKit {
     @JvmOverloads
     fun isEnabled(key: String, defaultValue: Boolean = false): Boolean {
         if (!initialized) return defaults.features[key] ?: defaultValue
-        return document.features[key]
+        return _document.value.features[key]
             ?: defaults.features[key]
             ?: defaultValue
     }
@@ -139,18 +166,20 @@ object ControlKit {
 
     /** Returns the entire current config as a JSON object — handy for debug screens. */
     @JvmStatic
-    fun rawJson(): JSONObject = document.toJson()
+    fun rawJson(): JSONObject = _document.value.toJson()
 
     /** Current config version (or 0 if nothing has loaded yet). */
     @JvmStatic
-    fun version(): Int = document.version
+    fun version(): Int = _document.value.version
 
     /** Test / re-init helper. Stops the refresher and forgets state. Cache is NOT cleared. */
     @JvmStatic
     fun reset() {
-        refresher.stop()
+        refresher?.stop()
+        refresher = null
         initialized = false
-        document = ConfigDocument.EMPTY
+        _document.value = ConfigDocument.EMPTY
+        _configVersion.value = 0
         defaults = ControlKitDefaults()
     }
 
@@ -160,13 +189,20 @@ object ControlKit {
 
     private fun readConfigValue(key: String): Any? {
         if (!initialized) return defaults.config[key]
-        return document.config[key] ?: defaults.config[key]
+        return _document.value.config[key] ?: defaults.config[key]
+    }
+
+    private fun updateDocument(doc: ConfigDocument) {
+        _document.value = doc
+        // Use the SERVER's version when present so it lines up with the portal,
+        // otherwise tick locally so collectors still wake up.
+        _configVersion.value = if (doc.version > 0) doc.version else _configVersion.value + 1
     }
 
     private suspend fun fetchInternal() {
         try {
             val fresh = network.fetchConfig()
-            document = fresh
+            updateDocument(fresh)
             cache.save(fresh)
             Log.d(TAG, "Fetched config version=${fresh.version} env=${fresh.environment}")
         } catch (t: Throwable) {

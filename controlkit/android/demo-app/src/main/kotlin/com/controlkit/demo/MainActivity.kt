@@ -7,13 +7,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -41,9 +41,11 @@ private fun DemoApp() {
     val nav = rememberNavController()
     val scope = rememberCoroutineScope()
 
-    // A simple counter that re-keys Compose state after a refresh so reads pick up
-    // the new values from the SDK without us needing a full reactive layer.
-    var refreshTick by remember { mutableIntStateOf(0) }
+    // Subscribe to the SDK's version flow. Every time the SDK swaps the in-memory
+    // document — manual fetch OR the 30 s background poll — `version` updates and
+    // every `remember(version) { ... }` below re-reads the latest values.
+    val version by ControlKit.configVersion.collectAsStateWithLifecycle()
+
     var refreshing by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
 
@@ -58,7 +60,6 @@ private fun DemoApp() {
                     lastError = t.message
                 } finally {
                     refreshing = false
-                    refreshTick += 1
                 }
             }
         }
@@ -67,7 +68,7 @@ private fun DemoApp() {
     NavHost(navController = nav, startDestination = "home") {
         composable("home") {
             HomeScreen(
-                refreshTick = refreshTick,
+                version = version,
                 refreshing = refreshing,
                 lastError = lastError,
                 onRefresh = onRefresh,
@@ -76,7 +77,7 @@ private fun DemoApp() {
         }
         composable("debug") {
             DebugScreen(
-                refreshTick = refreshTick,
+                version = version,
                 refreshing = refreshing,
                 lastError = lastError,
                 onRefresh = onRefresh,

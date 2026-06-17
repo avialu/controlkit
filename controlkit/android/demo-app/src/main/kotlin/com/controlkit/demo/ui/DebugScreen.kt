@@ -26,14 +26,13 @@ import com.controlkit.sdk.ControlKit
 
 @Composable
 fun DebugScreen(
-    refreshTick: Int,
+    version: Int,
     refreshing: Boolean,
     lastError: String?,
     onRefresh: () -> Unit,
     onBack: () -> Unit,
 ) {
-    val json    = remember(refreshTick) { ControlKit.rawJson().toString(2) }
-    val version = remember(refreshTick) { ControlKit.version() }
+    val json = remember(version) { ControlKit.rawJson().toString(2) }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(

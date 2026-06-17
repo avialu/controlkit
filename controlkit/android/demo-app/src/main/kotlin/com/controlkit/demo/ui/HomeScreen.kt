@@ -24,19 +24,19 @@ import com.controlkit.sdk.ControlKit
 
 @Composable
 fun HomeScreen(
-    refreshTick: Int,
+    version: Int,
     refreshing: Boolean,
     lastError: String?,
     onRefresh: () -> Unit,
     onOpenDebug: () -> Unit,
 ) {
-    // Re-read every refresh so the UI reflects the latest config.
-    val showBanner  = remember(refreshTick) { ControlKit.isEnabled("show_banner", false) }
-    val bannerText  = remember(refreshTick) { ControlKit.getString("banner_text", "") }
-    val useNewHome  = remember(refreshTick) { ControlKit.isEnabled("new_home", false) }
-    val welcomeText = remember(refreshTick) { ControlKit.getString("welcome_text", "Hello!") }
-    val maxItems    = remember(refreshTick) { ControlKit.getInt("max_items", 5) }
-    val version     = remember(refreshTick) { ControlKit.version() }
+    // `version` comes from ControlKit.configVersion (StateFlow). Every time the SDK
+    // swaps the document — manual fetch OR background poll — these reads re-fire.
+    val showBanner  = remember(version) { ControlKit.isEnabled("show_banner", false) }
+    val bannerText  = remember(version) { ControlKit.getString("banner_text", "") }
+    val useNewHome  = remember(version) { ControlKit.isEnabled("new_home", false) }
+    val welcomeText = remember(version) { ControlKit.getString("welcome_text", "Hello!") }
+    val maxItems    = remember(version) { ControlKit.getInt("max_items", 5) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         if (showBanner && bannerText.isNotBlank()) {

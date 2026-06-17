@@ -7,24 +7,23 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.minutes
 
 /**
  * Periodically calls a refresh lambda from a background coroutine. The MVP
- * fires once every [interval]; nothing fancy.
+ * fires once every [intervalMillis]; nothing fancy.
  */
 internal class BackgroundRefresher(
-    private val interval: Duration = 15.minutes,
+    private val intervalMillis: Long,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var job: Job? = null
 
     fun start(refresh: suspend () -> Unit) {
         if (job?.isActive == true) return
+        if (intervalMillis <= 0) return
         job = scope.launch {
             while (isActive) {
-                delay(interval)
+                delay(intervalMillis)
                 runCatching { refresh() }
             }
         }
