@@ -21,6 +21,20 @@ Each folder has its own README with detailed setup.
 
 Roughly 10 minutes from clone to "the Android emulator shows new behavior when I toggle a flag in the portal".
 
+### Daily startup (after the one-time setup below)
+
+Everything goes through the `Makefile` at the root:
+
+```bash
+make up          # starts Postgres + backend + portal in new Terminal windows
+make status      # check what's listening on :5432 / :4000 / :5173
+make down        # stop everything
+```
+
+Other useful targets: `make help`, `make migrate`, `make seed`, `make reset`, `make psql`, `make install`.
+
+### One-time setup
+
 1. **Backend**
 
    ```bash
@@ -30,7 +44,6 @@ Roughly 10 minutes from clone to "the Android emulator shows new behavior when I
    npm install
    npm run migrate
    npm run seed               # prints production + staging API keys
-   npm run dev                # http://localhost:4000
    ```
 
 2. **Portal**
@@ -39,8 +52,9 @@ Roughly 10 minutes from clone to "the Android emulator shows new behavior when I
    cd ../portal
    cp .env.example .env       # default points at localhost:4000
    npm install
-   npm run dev                # http://localhost:5173
    ```
+
+   …or from the repo root, just `make install` to do both at once.
 
 3. **Android demo**
 
