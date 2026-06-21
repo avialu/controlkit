@@ -132,10 +132,17 @@ button.danger:hover { background: #fee2e2; }
   background: #fff;
   color: var(--muted);
   border-left: 1px solid var(--border);
+  cursor: grab;
+  user-select: none;
 }
 .env-picker button:first-child { border-left: none; }
 .env-picker button.active { background: var(--primary); color: #fff; }
 .env-picker button:disabled { opacity: 0.5; cursor: not-allowed; }
+.env-picker button:active { cursor: grabbing; }
+/* Visual cue while dragging — a thick left border on the button we'd insert before. */
+.env-picker button.drop-target {
+  box-shadow: inset 3px 0 0 0 var(--primary);
+}
 
 /* tables */
 .data-table {

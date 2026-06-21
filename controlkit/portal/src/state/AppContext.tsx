@@ -12,6 +12,8 @@ interface AppState {
   availableEnvironments: string[];
   /** Refetch the env list for the current project (call after creating an env). */
   reloadEnvironments: () => Promise<void>;
+  /** Persist a custom env display order for the current project. */
+  setEnvironmentOrder: (order: string[]) => void;
   userName: string;
   setUserName: (name: string) => void;
   reloadProjects: () => Promise<void>;
@@ -24,6 +26,38 @@ const Ctx = createContext<AppState | undefined>(undefined);
 const LS_PROJECT = 'ck.projectId';
 const LS_ENV = 'ck.env';
 const LS_USER = 'ck.user';
+const LS_ENV_ORDER_PREFIX = 'ck.env-order.';
+
+/**
+ * Read the user's saved env order for a project.
+ * Returns an empty list if none was saved (i.e. use the backend's ordering).
+ */
+function loadEnvOrder(projectId: string): string[] {
+  try {
+    const raw = localStorage.getItem(LS_ENV_ORDER_PREFIX + projectId);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((s: unknown): s is string => typeof s === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveEnvOrder(projectId: string, order: string[]) {
+  localStorage.setItem(LS_ENV_ORDER_PREFIX + projectId, JSON.stringify(order));
+}
+
+/**
+ * Reconcile the backend list with the user's saved order:
+ *  - keep saved-and-still-present envs in their saved positions
+ *  - drop envs the user reordered that no longer exist
+ *  - append envs the backend reports but the user hasn't placed yet (newcomers go to the end)
+ */
+function applyEnvOrder(envs: string[], preferred: string[]): string[] {
+  const pinned = preferred.filter((e) => envs.includes(e));
+  const newcomers = envs.filter((e) => !pinned.includes(e));
+  return [...pinned, ...newcomers];
+}
 
 export function AppProvider({ children }: { children: ReactNode }) {
   const [projects, setProjects] = useState<Project[]>([]);
@@ -64,18 +98,28 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
     try {
       const envs = await api.listEnvironments(selectedProjectId);
-      setAvailableEnvironments(envs);
+      const ordered = applyEnvOrder(envs, loadEnvOrder(selectedProjectId));
+      setAvailableEnvironments(ordered);
       // If the persisted env doesn't exist for this project, snap to the first
       // available one. Stops Flags/Config pages from showing an empty state
       // just because the user switched projects.
-      if (envs.length > 0 && !envs.includes(environment)) {
-        setEnv(envs[0]);
-        localStorage.setItem(LS_ENV, envs[0]);
+      if (ordered.length > 0 && !ordered.includes(environment)) {
+        setEnv(ordered[0]);
+        localStorage.setItem(LS_ENV, ordered[0]);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
   }, [selectedProjectId, environment]);
+
+  const setEnvironmentOrder = useCallback(
+    (order: string[]) => {
+      if (!selectedProjectId) return;
+      saveEnvOrder(selectedProjectId, order);
+      setAvailableEnvironments(order);
+    },
+    [selectedProjectId],
+  );
 
   useEffect(() => {
     void reloadProjects();
@@ -101,6 +145,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       },
       availableEnvironments,
       reloadEnvironments,
+      setEnvironmentOrder,
       userName,
       setUserName: (n) => {
         setUser(n);
@@ -116,6 +161,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       environment,
       availableEnvironments,
       reloadEnvironments,
+      setEnvironmentOrder,
       userName,
       reloadProjects,
       loading,

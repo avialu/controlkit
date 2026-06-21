@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { api } from '../api/client';
 import { useApp } from '../state/AppContext';
 import Modal from './Modal';
@@ -8,11 +8,27 @@ export default function EnvPicker() {
     environment,
     setEnvironment,
     availableEnvironments,
+    setEnvironmentOrder,
     selectedProjectId,
     userName,
     reloadEnvironments,
   } = useApp();
   const [showAdd, setShowAdd] = useState(false);
+
+  // Track which env is being dragged + which one we'd drop on, for styling.
+  const dragSrc = useRef<string | null>(null);
+  const [dragOver, setDragOver] = useState<string | null>(null);
+
+  function reorder(src: string, target: string) {
+    if (src === target) return;
+    const next = [...availableEnvironments];
+    const from = next.indexOf(src);
+    const to = next.indexOf(target);
+    if (from === -1 || to === -1) return;
+    next.splice(from, 1);
+    next.splice(to, 0, src);
+    setEnvironmentOrder(next);
+  }
 
   // If the project has no envs yet (brand-new project), show a single CTA
   // instead of an empty picker.
@@ -44,16 +60,53 @@ export default function EnvPicker() {
   }
 
   return (
-    <div className="env-picker">
-      {availableEnvironments.map((env) => (
-        <button
-          key={env}
-          className={environment === env ? 'active' : ''}
-          onClick={() => setEnvironment(env)}
-        >
-          {env}
-        </button>
-      ))}
+    <div className="env-picker" title="Drag to reorder">
+      {availableEnvironments.map((env) => {
+        const isActive = environment === env;
+        const isDropTarget = dragOver === env && dragSrc.current && dragSrc.current !== env;
+        const classes = [
+          isActive ? 'active' : '',
+          isDropTarget ? 'drop-target' : '',
+        ].filter(Boolean).join(' ');
+        return (
+          <button
+            key={env}
+            className={classes}
+            draggable
+            onClick={() => setEnvironment(env)}
+            onDragStart={(e) => {
+              dragSrc.current = env;
+              e.dataTransfer.effectAllowed = 'move';
+              // Some browsers require non-empty data to start the drag.
+              e.dataTransfer.setData('text/plain', env);
+            }}
+            onDragEnter={() => setDragOver(env)}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }}
+            onDragLeave={(e) => {
+              // Only clear when leaving for something outside this button.
+              if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                setDragOver((cur) => (cur === env ? null : cur));
+              }
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              const src = dragSrc.current;
+              if (src) reorder(src, env);
+              dragSrc.current = null;
+              setDragOver(null);
+            }}
+            onDragEnd={() => {
+              dragSrc.current = null;
+              setDragOver(null);
+            }}
+          >
+            {env}
+          </button>
+        );
+      })}
       <button
         title="Add a new environment"
         disabled={!selectedProjectId}
