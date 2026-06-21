@@ -11,6 +11,7 @@ router.get('/projects', projects.list);
 router.post('/projects', projects.create);
 router.get('/projects/:id/api-keys', projects.listApiKeys);
 router.post('/projects/:id/api-keys', projects.createApiKey);
+router.get('/projects/:id/environments', projects.listEnvironments);
 
 router.get('/flags', flags.list);
 router.post('/flags', flags.create);

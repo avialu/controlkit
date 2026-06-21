@@ -1,4 +1,9 @@
-export type Environment = 'production' | 'staging';
+/**
+ * Environments are free-form labels. The seed creates "production" and
+ * "staging" out of the box, but any string is valid — a new env springs into
+ * existence the moment an API key (or flag/config) is created with that name.
+ */
+export type Environment = string;
 
 export interface Project {
   id: string;

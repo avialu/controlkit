@@ -4,7 +4,6 @@ import { useApp } from '../state/AppContext';
 import type {
   ConfigSnapshot,
   DraftStatus,
-  Environment,
   VersionDetail,
   VersionSummary,
 } from '../api/types';
@@ -13,7 +12,7 @@ import Modal from '../components/Modal';
 import PublishBar from '../components/PublishBar';
 
 export default function VersionsPage() {
-  const { selectedProjectId, environment, userName } = useApp();
+  const { selectedProjectId, environment, userName, availableEnvironments } = useApp();
   const [rows, setRows] = useState<VersionSummary[]>([]);
   const [drafts, setDrafts] = useState<DraftStatus | null>(null);
   const [loading, setLoading] = useState(false);
@@ -113,7 +112,8 @@ export default function VersionsPage() {
 
   if (!selectedProjectId) return <p className="muted">Select a project first.</p>;
 
-  const targetEnv: Environment = environment === 'production' ? 'staging' : 'production';
+  // Promote can target any environment other than the source (the current one).
+  const promoteTargets = availableEnvironments.filter((e) => e !== environment);
 
   return (
     <div>
@@ -124,7 +124,7 @@ export default function VersionsPage() {
       <p className="muted" style={{ marginTop: -8 }}>
         Every release is a published snapshot. Edit flags or config on those
         pages, then <strong>Publish</strong> to cut a new version. Use{' '}
-        <strong>Promote</strong> to roll a release out to <code>{targetEnv}</code>,
+        <strong>Promote</strong> to roll a release out to another environment,
         or <strong>Rollback</strong> to restore an earlier release.
       </p>
 
@@ -148,9 +148,9 @@ export default function VersionsPage() {
       {promoteFrom && (
         <PromoteModal
           source={promoteFrom}
-          targetEnv={targetEnv}
+          targets={promoteTargets}
           onClose={() => setPromoteFrom(null)}
-          onSubmit={async (note) => {
+          onSubmit={async (targetEnv, note) => {
             await api.promote({
               sourceVersionId: promoteFrom.id,
               targetEnvironment: targetEnv,
@@ -242,24 +242,26 @@ function RollbackModal({
 
 function PromoteModal({
   source,
-  targetEnv,
+  targets,
   onClose,
   onSubmit,
 }: {
   source: VersionSummary;
-  targetEnv: Environment;
+  targets: string[];
   onClose: () => void;
-  onSubmit: (note: string) => Promise<void>;
+  onSubmit: (targetEnv: string, note: string) => Promise<void>;
 }) {
+  const [target, setTarget] = useState<string>(targets[0] ?? '');
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function handle() {
+    if (!target) { setErr('Pick a target environment'); return; }
     setSubmitting(true);
     setErr(null);
     try {
-      await onSubmit(note.trim());
+      await onSubmit(target, note.trim());
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -267,18 +269,37 @@ function PromoteModal({
     }
   }
 
+  if (targets.length === 0) {
+    return (
+      <Modal title={`Promote v${source.version}`} onClose={onClose}>
+        <p className="muted" style={{ marginTop: 0 }}>
+          No other environments to promote to. Use the <strong>+</strong>{' '}
+          button in the environment picker to add one.
+        </p>
+        <div className="modal-actions">
+          <button onClick={onClose}>Close</button>
+        </div>
+      </Modal>
+    );
+  }
+
   return (
     <Modal
-      title={`Promote v${source.version} (${source.environment}) → ${targetEnv}`}
+      title={`Promote v${source.version} from ${source.environment}`}
       onClose={onClose}
     >
       <p className="muted" style={{ marginTop: 0 }}>
-        Copies every flag and config value from this snapshot into{' '}
-        <code>{targetEnv}</code>, then publishes the result so the SDK in{' '}
-        <code>{targetEnv}</code> immediately serves it. Existing keys in{' '}
-        <code>{targetEnv}</code> are overwritten; keys that aren't in this
-        snapshot are left untouched.
+        Copies every flag and config value from this snapshot into the target
+        environment, then publishes the result so its SDK immediately serves
+        it. Existing keys in the target are overwritten; keys that aren't in
+        this snapshot are left untouched.
       </p>
+      <label>
+        Target environment
+        <select value={target} onChange={(e) => setTarget(e.target.value)}>
+          {targets.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </label>
       <label>
         Release note (optional)
         <input
@@ -291,7 +312,7 @@ function PromoteModal({
       <div className="modal-actions">
         <button onClick={onClose}>Cancel</button>
         <button className="primary" disabled={submitting} onClick={handle}>
-          {submitting ? 'Promoting…' : `Promote to ${targetEnv}`}
+          {submitting ? 'Promoting…' : `Promote to ${target}`}
         </button>
       </div>
     </Modal>

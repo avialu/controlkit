@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api } from '../api/client';
 import type { Environment, Project } from '../api/types';
 
@@ -8,6 +8,10 @@ interface AppState {
   setSelectedProjectId: (id: string) => void;
   environment: Environment;
   setEnvironment: (env: Environment) => void;
+  /** Distinct environment names that exist for the currently selected project. */
+  availableEnvironments: string[];
+  /** Refetch the env list for the current project (call after creating an env). */
+  reloadEnvironments: () => Promise<void>;
   userName: string;
   setUserName: (name: string) => void;
   reloadProjects: () => Promise<void>;
@@ -27,15 +31,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
     () => localStorage.getItem(LS_PROJECT),
   );
   const [environment, setEnv] = useState<Environment>(
-    () => (localStorage.getItem(LS_ENV) as Environment) || 'production',
+    () => localStorage.getItem(LS_ENV) || 'production',
   );
+  const [availableEnvironments, setAvailableEnvironments] = useState<string[]>([]);
   const [userName, setUser] = useState<string>(
     () => localStorage.getItem(LS_USER) || 'admin',
   );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  async function reloadProjects() {
+  const reloadProjects = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -50,12 +55,36 @@ export function AppProvider({ children }: { children: ReactNode }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [selectedProjectId]);
+
+  const reloadEnvironments = useCallback(async () => {
+    if (!selectedProjectId) {
+      setAvailableEnvironments([]);
+      return;
+    }
+    try {
+      const envs = await api.listEnvironments(selectedProjectId);
+      setAvailableEnvironments(envs);
+      // If the persisted env doesn't exist for this project, snap to the first
+      // available one. Stops Flags/Config pages from showing an empty state
+      // just because the user switched projects.
+      if (envs.length > 0 && !envs.includes(environment)) {
+        setEnv(envs[0]);
+        localStorage.setItem(LS_ENV, envs[0]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, [selectedProjectId, environment]);
 
   useEffect(() => {
     void reloadProjects();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    void reloadEnvironments();
+  }, [reloadEnvironments]);
 
   const value = useMemo<AppState>(
     () => ({
@@ -70,6 +99,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         setEnv(env);
         localStorage.setItem(LS_ENV, env);
       },
+      availableEnvironments,
+      reloadEnvironments,
       userName,
       setUserName: (n) => {
         setUser(n);
@@ -79,7 +110,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
       loading,
       error,
     }),
-    [projects, selectedProjectId, environment, userName, loading, error],
+    [
+      projects,
+      selectedProjectId,
+      environment,
+      availableEnvironments,
+      reloadEnvironments,
+      userName,
+      reloadProjects,
+      loading,
+      error,
+    ],
   );
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

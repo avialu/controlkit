@@ -32,4 +32,23 @@ async function create({ projectId, environment, userName }) {
   return apiKey;
 }
 
-module.exports = { listByProject, create, generateKey };
+/**
+ * Returns the unique set of environment names that exist for a project,
+ * sourced from anything that has an `environment` column. This gives the
+ * portal a dynamic list to render in EnvPicker / Promote dropdowns without
+ * needing a dedicated `environments` table.
+ */
+async function listEnvironmentsForProject(projectId) {
+  const { rows } = await query(
+    `SELECT environment FROM api_keys      WHERE project_id = $1
+       UNION
+     SELECT environment FROM flags          WHERE project_id = $1
+       UNION
+     SELECT environment FROM config_values  WHERE project_id = $1
+     ORDER BY environment ASC`,
+    [projectId],
+  );
+  return rows.map((r) => r.environment);
+}
+
+module.exports = { listByProject, create, generateKey, listEnvironmentsForProject };

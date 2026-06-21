@@ -1,12 +1,20 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useApp } from '../state/AppContext';
-import type { ApiKey, Environment } from '../api/types';
+import type { ApiKey } from '../api/types';
 import DataTable, { type Column } from '../components/DataTable';
 import Modal from '../components/Modal';
 
 export default function ProjectsPage() {
-  const { projects, selectedProjectId, setSelectedProjectId, reloadProjects, userName } = useApp();
+  const {
+    projects,
+    selectedProjectId,
+    setSelectedProjectId,
+    reloadProjects,
+    userName,
+    availableEnvironments,
+    reloadEnvironments,
+  } = useApp();
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
@@ -15,7 +23,7 @@ export default function ProjectsPage() {
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [keysLoading, setKeysLoading] = useState(false);
   const [showCreateKey, setShowCreateKey] = useState(false);
-  const [newKeyEnv, setNewKeyEnv] = useState<Environment>('production');
+  const [newKeyEnv, setNewKeyEnv] = useState<string>('');
 
   async function loadKeys(id: string) {
     setKeysLoading(true);
@@ -50,11 +58,14 @@ export default function ProjectsPage() {
 
   async function handleCreateKey() {
     if (!selectedProjectId) return;
+    const env = newKeyEnv.trim();
+    if (!env) { setError('Environment is required'); return; }
     setError(null);
     try {
-      await api.createApiKey(selectedProjectId, newKeyEnv, userName);
+      await api.createApiKey(selectedProjectId, env, userName);
       setShowCreateKey(false);
-      await loadKeys(selectedProjectId);
+      setNewKeyEnv('');
+      await Promise.all([loadKeys(selectedProjectId), reloadEnvironments()]);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -125,14 +136,25 @@ export default function ProjectsPage() {
         <Modal title="Generate API key" onClose={() => setShowCreateKey(false)}>
           <label>
             Environment
-            <select value={newKeyEnv} onChange={(e) => setNewKeyEnv(e.target.value as Environment)}>
-              <option value="production">production</option>
-              <option value="staging">staging</option>
-            </select>
+            <input
+              value={newKeyEnv}
+              list="known-envs"
+              placeholder="e.g. production, staging, qa"
+              autoFocus
+              onChange={(e) => setNewKeyEnv(e.target.value)}
+            />
+            <datalist id="known-envs">
+              {availableEnvironments.map((env) => <option key={env} value={env} />)}
+            </datalist>
           </label>
+          <p className="muted" style={{ fontSize: 13, marginTop: -4 }}>
+            Pick an existing environment or type a new name to create one.
+          </p>
           <div className="modal-actions">
             <button onClick={() => setShowCreateKey(false)}>Cancel</button>
-            <button className="primary" onClick={handleCreateKey}>Generate</button>
+            <button className="primary" disabled={!newKeyEnv.trim()} onClick={handleCreateKey}>
+              Generate
+            </button>
           </div>
         </Modal>
       )}

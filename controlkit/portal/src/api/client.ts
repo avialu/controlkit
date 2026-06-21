@@ -47,6 +47,8 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ environment, userName }),
     }),
+  listEnvironments: (projectId: string) =>
+    request<string[]>(`/portal/projects/${projectId}/environments`),
 
   // ---- flags ----
   listFlags: (projectId: string, environment: Environment) =>

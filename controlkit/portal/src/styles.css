@@ -125,8 +125,17 @@ button.danger:hover { background: #fee2e2; }
 
 /* env picker */
 .env-picker { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.env-picker button { border: none; border-radius: 0; padding: 4px 12px; background: #fff; color: var(--muted); }
+.env-picker button {
+  border: none;
+  border-radius: 0;
+  padding: 4px 12px;
+  background: #fff;
+  color: var(--muted);
+  border-left: 1px solid var(--border);
+}
+.env-picker button:first-child { border-left: none; }
 .env-picker button.active { background: var(--primary); color: #fff; }
+.env-picker button:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* tables */
 .data-table {

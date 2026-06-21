@@ -31,4 +31,10 @@ async function listApiKeys(req, res, next) {
   } catch (err) { next(err); }
 }
 
-module.exports = { list, create, createApiKey, listApiKeys };
+async function listEnvironments(req, res, next) {
+  try {
+    res.json(await apiKeysService.listEnvironmentsForProject(req.params.id));
+  } catch (err) { next(err); }
+}
+
+module.exports = { list, create, createApiKey, listApiKeys, listEnvironments };
