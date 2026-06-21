@@ -43,9 +43,31 @@ export interface AuditLog {
   project_id: string;
   entity_type: string;
   entity_id: string | null;
-  action: 'create' | 'update' | 'delete';
+  action: 'create' | 'update' | 'delete' | 'publish';
   old_value: unknown;
   new_value: unknown;
   user_name: string | null;
   timestamp: string;
+}
+
+export interface ConfigSnapshot {
+  features: Record<string, boolean>;
+  config: Record<string, unknown>;
+}
+
+/** Row from /portal/versions (list) — no snapshot to keep payload small. */
+export interface VersionSummary {
+  id: string;
+  project_id: string;
+  version: number;
+  environment: string;
+  note: string | null;
+  is_published: boolean;
+  user_name: string | null;
+  published_at: string;
+}
+
+/** Row from /portal/versions/:id — includes the JSON snapshot. */
+export interface VersionDetail extends VersionSummary {
+  snapshot: ConfigSnapshot | null;
 }

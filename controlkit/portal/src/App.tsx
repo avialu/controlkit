@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import ProjectsPage from './pages/Projects';
 import FlagsPage from './pages/Flags';
 import ConfigPage from './pages/Config';
+import VersionsPage from './pages/Versions';
 import AuditLogsPage from './pages/AuditLogs';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
           <NavLink to="/projects">Projects</NavLink>
           <NavLink to="/flags">Feature Flags</NavLink>
           <NavLink to="/config">Remote Config</NavLink>
+          <NavLink to="/versions">Versions</NavLink>
           <NavLink to="/audit">Audit Logs</NavLink>
         </nav>
       </aside>
@@ -55,6 +57,7 @@ export default function App() {
               <Route path="/projects" element={<ProjectsPage />} />
               <Route path="/flags" element={<FlagsPage />} />
               <Route path="/config" element={<ConfigPage />} />
+              <Route path="/versions" element={<VersionsPage />} />
               <Route path="/audit" element={<AuditLogsPage />} />
             </Routes>
           )}

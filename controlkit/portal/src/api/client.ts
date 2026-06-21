@@ -6,6 +6,8 @@ import type {
   Environment,
   Flag,
   Project,
+  VersionDetail,
+  VersionSummary,
 } from './types';
 
 const BASE_URL: string = (import.meta.env.VITE_API_URL as string) || 'http://localhost:4000';
@@ -95,6 +97,28 @@ export const api = {
     qs.set('limit', String(limit));
     return request<AuditLog[]>(`/portal/audit-logs?${qs.toString()}`);
   },
+
+  // ---- versions ----
+  listVersions: (
+    projectId: string,
+    environment: Environment,
+    options: { publishedOnly?: boolean; limit?: number } = {},
+  ) => {
+    const qs = new URLSearchParams({ projectId, environment });
+    if (options.publishedOnly) qs.set('publishedOnly', 'true');
+    if (options.limit) qs.set('limit', String(options.limit));
+    return request<VersionSummary[]>(`/portal/versions?${qs.toString()}`);
+  },
+  getVersion: (id: string) => request<VersionDetail>(`/portal/versions/${id}`),
+  publish: (input: {
+    projectId: string;
+    environment: Environment;
+    note: string;
+    userName: string;
+  }) => request<VersionDetail>('/portal/publish', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }),
 };
 
 export { BASE_URL };

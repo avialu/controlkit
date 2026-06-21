@@ -66,7 +66,7 @@ async function create({ projectId, key, value, type, environment, userName }) {
     projectId, entityType: 'config_value', entityId: row.id,
     action: 'create', newValue: row, userName,
   });
-  await versions.bumpVersion(projectId, environment);
+  await versions.bumpVersion(projectId, environment, { userName });
   return row;
 }
 
@@ -86,7 +86,7 @@ async function update({ id, value, type, userName }) {
     projectId: before.project_id, entityType: 'config_value', entityId: id,
     action: 'update', oldValue: before, newValue: after, userName,
   });
-  await versions.bumpVersion(before.project_id, before.environment);
+  await versions.bumpVersion(before.project_id, before.environment, { userName });
   return after;
 }
 
@@ -97,7 +97,7 @@ async function remove({ id, userName }) {
     projectId: before.project_id, entityType: 'config_value', entityId: id,
     action: 'delete', oldValue: before, userName,
   });
-  await versions.bumpVersion(before.project_id, before.environment);
+  await versions.bumpVersion(before.project_id, before.environment, { userName });
 }
 
 module.exports = { list, getById, create, update, remove, decodeValue };

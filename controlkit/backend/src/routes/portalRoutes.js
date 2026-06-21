@@ -3,6 +3,7 @@ const projects = require('../controllers/projectsController');
 const flags = require('../controllers/flagsController');
 const config = require('../controllers/configController');
 const audit = require('../controllers/auditController');
+const versions = require('../controllers/versionsController');
 
 const router = express.Router();
 
@@ -22,5 +23,9 @@ router.put('/config/:id', config.update);
 router.delete('/config/:id', config.remove);
 
 router.get('/audit-logs', audit.list);
+
+router.get('/versions', versions.list);
+router.get('/versions/:id', versions.getOne);
+router.post('/publish', versions.publish);
 
 module.exports = router;
