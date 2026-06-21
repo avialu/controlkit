@@ -3,6 +3,7 @@ import type {
   AuditLog,
   ConfigType,
   ConfigValue,
+  DraftStatus,
   Environment,
   Flag,
   Project,
@@ -119,6 +120,27 @@ export const api = {
     method: 'POST',
     body: JSON.stringify(input),
   }),
+  promote: (input: {
+    sourceVersionId: string;
+    targetEnvironment: Environment;
+    note?: string;
+    userName: string;
+  }) => request<VersionDetail>('/portal/promote', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }),
+  rollback: (input: {
+    sourceVersionId: string;
+    note?: string;
+    userName: string;
+  }) => request<VersionDetail>('/portal/rollback', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  }),
+  getDraftStatus: (projectId: string, environment: Environment) =>
+    request<DraftStatus>(
+      `/portal/draft-status?projectId=${projectId}&environment=${environment}`,
+    ),
 };
 
 export { BASE_URL };

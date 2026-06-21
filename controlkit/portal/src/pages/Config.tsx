@@ -1,15 +1,17 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useApp } from '../state/AppContext';
-import type { ConfigType, ConfigValue } from '../api/types';
+import type { ConfigType, ConfigValue, DraftStatus } from '../api/types';
 import DataTable, { type Column } from '../components/DataTable';
 import Modal from '../components/Modal';
+import PublishBar from '../components/PublishBar';
 
 const TYPES: ConfigType[] = ['string', 'int', 'boolean', 'json'];
 
 export default function ConfigPage() {
   const { selectedProjectId, environment, userName } = useApp();
   const [rows, setRows] = useState<ConfigValue[]>([]);
+  const [drafts, setDrafts] = useState<DraftStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editing, setEditing] = useState<ConfigValue | null>(null);
@@ -20,7 +22,12 @@ export default function ConfigPage() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await api.listConfig(selectedProjectId, environment));
+      const [list, status] = await Promise.all([
+        api.listConfig(selectedProjectId, environment),
+        api.getDraftStatus(selectedProjectId, environment),
+      ]);
+      setRows(list);
+      setDrafts(status);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -70,6 +77,8 @@ export default function ConfigPage() {
         <h2>Remote Config</h2>
         <button className="primary" onClick={() => setCreating(true)}>+ New value</button>
       </div>
+
+      <PublishBar status={drafts} onPublished={load} />
 
       {error && <div className="error">{error}</div>}
       {loading ? (

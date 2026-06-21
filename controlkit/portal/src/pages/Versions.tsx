@@ -1,39 +1,51 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useApp } from '../state/AppContext';
-import type { ConfigSnapshot, VersionDetail, VersionSummary } from '../api/types';
+import type {
+  ConfigSnapshot,
+  DraftStatus,
+  Environment,
+  VersionDetail,
+  VersionSummary,
+} from '../api/types';
 import DataTable, { type Column } from '../components/DataTable';
 import Modal from '../components/Modal';
+import PublishBar from '../components/PublishBar';
 
 export default function VersionsPage() {
   const { selectedProjectId, environment, userName } = useApp();
   const [rows, setRows] = useState<VersionSummary[]>([]);
+  const [drafts, setDrafts] = useState<DraftStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showPublishedOnly, setShowPublishedOnly] = useState(false);
 
   const [openDetail, setOpenDetail] = useState<{
     current: VersionDetail;
     previous: VersionDetail | null;
   } | null>(null);
 
-  const [showPublish, setShowPublish] = useState(false);
+  const [promoteFrom, setPromoteFrom] = useState<VersionSummary | null>(null);
+  const [rollbackTo, setRollbackTo] = useState<VersionSummary | null>(null);
 
   const load = useCallback(async () => {
     if (!selectedProjectId) return;
     setLoading(true);
     setError(null);
     try {
-      const list = await api.listVersions(selectedProjectId, environment, {
-        publishedOnly: showPublishedOnly,
-      });
+      const [list, status] = await Promise.all([
+        // Only published versions exist as a meaningful concept now.
+        // Legacy "auto" rows from older builds are hidden.
+        api.listVersions(selectedProjectId, environment, { publishedOnly: true }),
+        api.getDraftStatus(selectedProjectId, environment),
+      ]);
       setRows(list);
+      setDrafts(status);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setLoading(false);
     }
-  }, [selectedProjectId, environment, showPublishedOnly]);
+  }, [selectedProjectId, environment]);
 
   useEffect(() => {
     void load();
@@ -43,11 +55,9 @@ export default function VersionsPage() {
     setError(null);
     try {
       const current = await api.getVersion(row.id);
-      // Find the previous version (one lower number) regardless of filter.
-      const all = showPublishedOnly
-        ? await api.listVersions(selectedProjectId!, environment, { limit: 500 })
-        : rows;
-      const prevSummary = all.find((v) => v.version === row.version - 1) ?? null;
+      // Compare against the previous PUBLISHED version (skipping any legacy
+      // unpublished rows from older builds).
+      const prevSummary = rows.find((v) => v.version < row.version) ?? null;
       const previous = prevSummary ? await api.getVersion(prevSummary.id) : null;
       setOpenDetail({ current, previous });
     } catch (e) {
@@ -62,16 +72,6 @@ export default function VersionsPage() {
       render: (v) => <span className="mono">v{v.version}</span>,
     },
     {
-      header: 'Kind',
-      width: '110px',
-      render: (v) =>
-        v.is_published ? (
-          <span className="pill pill-create">published</span>
-        ) : (
-          <span className="pill">auto</span>
-        ),
-    },
-    {
       header: 'Note',
       render: (v) => v.note ?? <span className="muted">—</span>,
     },
@@ -83,34 +83,52 @@ export default function VersionsPage() {
     },
     {
       header: '',
-      width: '90px',
-      render: (v) => <button onClick={() => openVersion(v)}>View</button>,
+      width: '260px',
+      render: (v) => {
+        const isCurrent = drafts && v.version === drafts.publishedVersion;
+        return (
+          <div className="row-actions">
+            <button onClick={() => openVersion(v)}>View</button>
+            <button
+              title={`Promote v${v.version} to the other environment`}
+              onClick={() => setPromoteFrom(v)}
+            >
+              Promote
+            </button>
+            {!isCurrent && (
+              <button
+                className="danger"
+                title={`Roll back ${environment} to v${v.version}`}
+                onClick={() => setRollbackTo(v)}
+              >
+                Rollback
+              </button>
+            )}
+            {isCurrent && <span className="pill pill-create" style={{ alignSelf: 'center' }}>current</span>}
+          </div>
+        );
+      },
     },
   ];
 
   if (!selectedProjectId) return <p className="muted">Select a project first.</p>;
 
+  const targetEnv: Environment = environment === 'production' ? 'staging' : 'production';
+
   return (
     <div>
       <div className="page-header">
         <h2>Versions</h2>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-          <label className="checkbox-inline">
-            <input
-              type="checkbox"
-              checked={showPublishedOnly}
-              onChange={(e) => setShowPublishedOnly(e.target.checked)}
-            />
-            Published only
-          </label>
-          <button className="primary" onClick={() => setShowPublish(true)}>+ Publish</button>
-        </div>
       </div>
 
       <p className="muted" style={{ marginTop: -8 }}>
-        Every flag/config change creates an <strong>auto</strong> version capturing the full state.
-        Clicking <strong>Publish</strong> tags the current state as an explicit release with a note.
+        Every release is a published snapshot. Edit flags or config on those
+        pages, then <strong>Publish</strong> to cut a new version. Use{' '}
+        <strong>Promote</strong> to roll a release out to <code>{targetEnv}</code>,
+        or <strong>Rollback</strong> to restore an earlier release.
       </p>
+
+      <PublishBar status={drafts} onPublished={load} />
 
       {error && <div className="error">{error}</div>}
       {loading ? (
@@ -127,17 +145,36 @@ export default function VersionsPage() {
         />
       )}
 
-      {showPublish && (
-        <PublishModal
-          onClose={() => setShowPublish(false)}
+      {promoteFrom && (
+        <PromoteModal
+          source={promoteFrom}
+          targetEnv={targetEnv}
+          onClose={() => setPromoteFrom(null)}
           onSubmit={async (note) => {
-            await api.publish({
-              projectId: selectedProjectId,
-              environment,
-              note,
+            await api.promote({
+              sourceVersionId: promoteFrom.id,
+              targetEnvironment: targetEnv,
+              note: note || undefined,
               userName,
             });
-            setShowPublish(false);
+            setPromoteFrom(null);
+            await load();
+          }}
+        />
+      )}
+
+      {rollbackTo && drafts && (
+        <RollbackModal
+          source={rollbackTo}
+          currentVersion={drafts.publishedVersion}
+          onClose={() => setRollbackTo(null)}
+          onSubmit={async (note) => {
+            await api.rollback({
+              sourceVersionId: rollbackTo.id,
+              note: note || undefined,
+              userName,
+            });
+            setRollbackTo(null);
             await load();
           }}
         />
@@ -146,14 +183,14 @@ export default function VersionsPage() {
   );
 }
 
-// ----------------------------------------------------------------------------
-// Publish modal
-// ----------------------------------------------------------------------------
-
-function PublishModal({
+function RollbackModal({
+  source,
+  currentVersion,
   onClose,
   onSubmit,
 }: {
+  source: VersionSummary;
+  currentVersion: number;
   onClose: () => void;
   onSubmit: (note: string) => Promise<void>;
 }) {
@@ -162,7 +199,6 @@ function PublishModal({
   const [err, setErr] = useState<string | null>(null);
 
   async function handle() {
-    if (!note.trim()) return;
     setSubmitting(true);
     setErr(null);
     try {
@@ -175,25 +211,87 @@ function PublishModal({
   }
 
   return (
-    <Modal title="Publish current state" onClose={onClose}>
+    <Modal
+      title={`Roll back ${source.environment} from v${currentVersion} → v${source.version}`}
+      onClose={onClose}
+    >
       <p className="muted" style={{ marginTop: 0 }}>
-        Captures a snapshot of the current (features, config) state and tags it as a
-        released version with the note below.
+        Applies v{source.version}'s snapshot back onto <code>{source.environment}</code>'s
+        draft tables and publishes a new version with the restored state. The
+        SDK will serve it on its next fetch. Audit history is preserved —
+        nothing is deleted.
       </p>
       <label>
-        Release note
+        Release note (optional)
         <input
           value={note}
-          autoFocus
-          placeholder="e.g. v1.4 — Enable new checkout"
+          placeholder={`Rolled back to v${source.version}`}
           onChange={(e) => setNote(e.target.value)}
         />
       </label>
       {err && <div className="error">{err}</div>}
       <div className="modal-actions">
         <button onClick={onClose}>Cancel</button>
-        <button className="primary" disabled={!note.trim() || submitting} onClick={handle}>
-          {submitting ? 'Publishing…' : 'Publish'}
+        <button className="danger" disabled={submitting} onClick={handle}>
+          {submitting ? 'Rolling back…' : `Roll back to v${source.version}`}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function PromoteModal({
+  source,
+  targetEnv,
+  onClose,
+  onSubmit,
+}: {
+  source: VersionSummary;
+  targetEnv: Environment;
+  onClose: () => void;
+  onSubmit: (note: string) => Promise<void>;
+}) {
+  const [note, setNote] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function handle() {
+    setSubmitting(true);
+    setErr(null);
+    try {
+      await onSubmit(note.trim());
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Promote v${source.version} (${source.environment}) → ${targetEnv}`}
+      onClose={onClose}
+    >
+      <p className="muted" style={{ marginTop: 0 }}>
+        Copies every flag and config value from this snapshot into{' '}
+        <code>{targetEnv}</code>, then publishes the result so the SDK in{' '}
+        <code>{targetEnv}</code> immediately serves it. Existing keys in{' '}
+        <code>{targetEnv}</code> are overwritten; keys that aren't in this
+        snapshot are left untouched.
+      </p>
+      <label>
+        Release note (optional)
+        <input
+          value={note}
+          placeholder={`Promoted from ${source.environment} v${source.version}`}
+          onChange={(e) => setNote(e.target.value)}
+        />
+      </label>
+      {err && <div className="error">{err}</div>}
+      <div className="modal-actions">
+        <button onClick={onClose}>Cancel</button>
+        <button className="primary" disabled={submitting} onClick={handle}>
+          {submitting ? 'Promoting…' : `Promote to ${targetEnv}`}
         </button>
       </div>
     </Modal>
@@ -253,10 +351,7 @@ function VersionDetailModal({
   const showDiff = Boolean(previous);
 
   return (
-    <Modal
-      title={`Version v${current.version} — ${current.is_published ? 'published' : 'auto'}`}
-      onClose={onClose}
-    >
+    <Modal title={`Version v${current.version}`} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, minWidth: 560 }}>
         <div className="muted" style={{ fontSize: 13 }}>
           {current.note && <div><strong>Note:</strong> {current.note}</div>}

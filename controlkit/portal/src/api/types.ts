@@ -43,7 +43,7 @@ export interface AuditLog {
   project_id: string;
   entity_type: string;
   entity_id: string | null;
-  action: 'create' | 'update' | 'delete' | 'publish';
+  action: 'create' | 'update' | 'delete' | 'publish' | 'promote' | 'rollback';
   old_value: unknown;
   new_value: unknown;
   user_name: string | null;
@@ -53,6 +53,12 @@ export interface AuditLog {
 export interface ConfigSnapshot {
   features: Record<string, boolean>;
   config: Record<string, unknown>;
+  _meta?: { config_types?: Record<string, string> };
+}
+
+export interface DraftStatus {
+  publishedVersion: number;
+  draftCount: number;
 }
 
 /** Row from /portal/versions (list) — no snapshot to keep payload small. */

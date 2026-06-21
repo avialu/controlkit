@@ -85,7 +85,15 @@ async function run() {
     console.log(`Seeding config for ${env}…`);
     for (const c of CONFIG_SEEDS) await ensureConfig(project.id, env, c);
 
-    await versionsService.bumpVersion(project.id, env);
+    // Auto-publish the initial state so the SDK has something to serve out
+    // of the box. After this, the SDK only sees changes once you click
+    // Publish in the portal.
+    await versionsService.publish({
+      projectId: project.id,
+      environment: env,
+      note: 'Initial release (seeded)',
+      userName: 'seed',
+    });
 
     console.log(`\n${env.toUpperCase()} API key: ${apiKey.key}\n`);
   }

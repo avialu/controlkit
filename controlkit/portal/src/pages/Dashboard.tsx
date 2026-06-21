@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api } from '../api/client';
 import { useApp } from '../state/AppContext';
-import type { ConfigValue, Flag } from '../api/types';
+import type { ConfigValue, DraftStatus, Flag } from '../api/types';
 
 export default function Dashboard() {
   const { selectedProjectId, environment } = useApp();
   const [flags, setFlags] = useState<Flag[]>([]);
   const [config, setConfig] = useState<ConfigValue[]>([]);
+  const [drafts, setDrafts] = useState<DraftStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -16,11 +18,13 @@ export default function Dashboard() {
     Promise.all([
       api.listFlags(selectedProjectId, environment),
       api.listConfig(selectedProjectId, environment),
+      api.getDraftStatus(selectedProjectId, environment),
     ])
-      .then(([f, c]) => {
+      .then(([f, c, d]) => {
         if (!alive) return;
         setFlags(f);
         setConfig(c);
+        setDrafts(d);
       })
       .catch((e) => alive && setError(e instanceof Error ? e.message : String(e)));
     return () => {
@@ -41,12 +45,24 @@ export default function Dashboard() {
         <Card label="Flags" value={flags.length} />
         <Card label="Flags enabled" value={flags.filter((f) => f.enabled).length} />
         <Card label="Config values" value={config.length} />
-        <Card label="Environment" value={environment} />
+        <Card label="SDK serves" value={drafts ? `v${drafts.publishedVersion || 0}` : '—'} />
+        <Card label="Drafts pending" value={drafts ? drafts.draftCount : '—'} />
       </div>
 
-      <h3>Live SDK config preview</h3>
+      {drafts && drafts.draftCount > 0 && (
+        <div className="banner banner-warning">
+          <div>
+            <strong>{drafts.draftCount} unpublished change{drafts.draftCount === 1 ? '' : 's'}</strong>{' '}
+            in <code>{environment}</code>. The SDK is still serving v{drafts.publishedVersion || 0}.
+          </div>
+          <Link to="/versions" className="primary button-link">Go to Versions</Link>
+        </div>
+      )}
+
+      <h3>Draft state — current contents of the portal</h3>
       <p className="muted">
-        This is the JSON shape returned by <code>GET /sdk/config</code>.
+        This is what would be released if you clicked <strong>Publish</strong> right now.
+        Until then, the SDK keeps serving the snapshot from v{drafts?.publishedVersion ?? 0}.
       </p>
       <pre className="json">{JSON.stringify(buildPreview(flags, config, environment), null, 2)}</pre>
     </div>

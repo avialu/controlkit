@@ -1,6 +1,5 @@
 const { query } = require('../db/pool');
 const audit = require('./auditService');
-const versions = require('./versionsService');
 const { HttpError } = require('../middleware/errorHandler');
 
 async function list({ projectId, environment }) {
@@ -33,7 +32,6 @@ async function create({ projectId, name, enabled = false, environment, userName 
     projectId, entityType: 'flag', entityId: flag.id,
     action: 'create', newValue: flag, userName,
   });
-  await versions.bumpVersion(projectId, environment, { userName });
   return flag;
 }
 
@@ -58,7 +56,6 @@ async function update({ id, enabled, name, userName }) {
     projectId: before.project_id, entityType: 'flag', entityId: id,
     action: 'update', oldValue: before, newValue: after, userName,
   });
-  await versions.bumpVersion(before.project_id, before.environment, { userName });
   return after;
 }
 
@@ -69,7 +66,6 @@ async function remove({ id, userName }) {
     projectId: before.project_id, entityType: 'flag', entityId: id,
     action: 'delete', oldValue: before, userName,
   });
-  await versions.bumpVersion(before.project_id, before.environment, { userName });
 }
 
 module.exports = { list, getById, create, update, remove };

@@ -26,6 +26,9 @@ router.get('/audit-logs', audit.list);
 
 router.get('/versions', versions.list);
 router.get('/versions/:id', versions.getOne);
+router.get('/draft-status', versions.draftStatus);
 router.post('/publish', versions.publish);
+router.post('/promote', versions.promote);
+router.post('/rollback', versions.rollback);
 
 module.exports = router;

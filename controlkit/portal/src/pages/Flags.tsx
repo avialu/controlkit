@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api/client';
 import { useApp } from '../state/AppContext';
-import type { Flag } from '../api/types';
+import type { DraftStatus, Flag } from '../api/types';
 import DataTable, { type Column } from '../components/DataTable';
 import Modal from '../components/Modal';
+import PublishBar from '../components/PublishBar';
 
 export default function FlagsPage() {
   const { selectedProjectId, environment, userName } = useApp();
   const [flags, setFlags] = useState<Flag[]>([]);
+  const [drafts, setDrafts] = useState<DraftStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -19,7 +21,12 @@ export default function FlagsPage() {
     setLoading(true);
     setError(null);
     try {
-      setFlags(await api.listFlags(selectedProjectId, environment));
+      const [list, status] = await Promise.all([
+        api.listFlags(selectedProjectId, environment),
+        api.getDraftStatus(selectedProjectId, environment),
+      ]);
+      setFlags(list);
+      setDrafts(status);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -83,6 +90,8 @@ export default function FlagsPage() {
         <h2>Feature Flags</h2>
         <button className="primary" onClick={() => setCreating(true)}>+ New flag</button>
       </div>
+
+      <PublishBar status={drafts} onPublished={load} />
 
       {error && <div className="error">{error}</div>}
       {loading ? (
