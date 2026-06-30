@@ -71,19 +71,26 @@ Other useful targets: `make help`, `make migrate`, `make seed`, `make reset`, `m
    Open `android/` in Android Studio and run **demo-app** on an emulator.
 
 4. **Try it**
-   - Tap **Refresh** in the demo app — it pulls the latest config.
-   - In the portal, toggle the `new_home` flag → tap Refresh in the demo → the home screen swaps from list to grid.
-   - Change `welcome_text` or `max_items` → tap Refresh → the demo reflects the new values.
+   - In the portal, toggle any of the four feature flags. Your edit is a **draft** — the portal shows "N pending changes" and the SDK keeps serving the last published release.
+   - Click **Publish** (a release note is required). This cuts a new version that the SDK will serve.
+   - The demo app polls every 5 s, so the storefront updates on its own within a few seconds (or tap **Refresh** to pull immediately):
+     - `dark_mode` flips the whole app between light and dark themes.
+     - `new_version_available` shows/hides the "Update available" prompt.
+     - `show_promo_banner` shows/hides the marketing banner.
+     - `show_buy_button` shows/hides the "Buy" button on every product.
+   - Change `welcome_text`, `promo_text`, `update_message`, or `max_items` → **Publish** → the demo reflects the new values.
+   - Open the **Versions** page in the portal to see the release history, diff any two releases, and **promote** or **rollback** a release.
    - Open the demo's **Debug** screen to see the live JSON.
-   - Open **Audit Logs** in the portal — every change is recorded with the user name and a diff.
+   - Open **Audit Logs** in the portal — every change (including each publish) is recorded with the user name and a diff.
 
 ## Design notes
 
 - **One bundled SDK endpoint.** The SDK calls `GET /sdk/config` once and gets a full document: `{ version, environment, features, config }`. No per-flag round trips. This is the single most important backend design decision in the project.
-- **Per-environment version.** Any flag/config mutation bumps `config_versions` for the affected environment. The SDK exposes `ControlKit.version()` so future work can decide whether to skip a fetch.
-- **Audit everywhere.** Every mutation goes through `auditService.record` — the audit log is complete by construction.
+- **Draft → publish releases.** Editing a flag or config value in the portal only changes a **draft**; the SDK keeps serving the last *published* snapshot. Publishing captures the current draft state into `config_versions` and bumps that environment's version. **Promote** copies a release to another environment, **rollback** restores an earlier one — both produce new published versions. This keeps live traffic decoupled from in-progress editing.
+- **Per-environment version.** Each publish/promote/rollback bumps `config_versions` for the affected environment. The SDK exposes `ControlKit.version()` so future work can decide whether to skip a fetch.
+- **Audit everywhere.** Every mutation — and every publish/promote/rollback — goes through `auditService.record`, so the audit log is complete by construction.
 - **Cache-first SDK.** On `init` the SDK loads its SharedPreferences cache synchronously. The very first read after a relaunch already returns real data; the network is only a freshness mechanism.
-- **Two-layer background refresh.** The SDK runs an in-process coroutine timer (configurable, demo uses 30 s) for snappy foreground updates, and on top of that schedules a WorkManager `PeriodicWorkRequest` that survives the app process being killed. The worker reads persisted init params from SharedPreferences and writes a fresh cache so the next launch sees recent data immediately. WorkManager's 15-minute minimum is respected; the in-process timer covers anything faster.
+- **Two-layer background refresh.** The SDK runs an in-process coroutine timer (configurable; the default is 15 min, and the demo overrides it to 5 s for snappy foreground updates), and on top of that schedules a WorkManager `PeriodicWorkRequest` (default 30 min) that survives the app process being killed. The worker reads persisted init params from SharedPreferences and writes a fresh cache so the next launch sees recent data immediately. WorkManager's 15-minute minimum is respected; the in-process timer covers anything faster.
 - **No premature auth.** Portal endpoints are unauthenticated and the portal passes a `userName` field with every write so audit logs are still meaningful. A real auth layer is a clean follow-up.
 
 ## MVP scope — explicitly out of scope

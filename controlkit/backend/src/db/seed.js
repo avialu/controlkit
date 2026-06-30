@@ -7,15 +7,17 @@ const ENVIRONMENTS = ['production', 'staging'];
 const DEMO_PROJECT_NAME = 'Demo Project';
 
 const FLAG_SEEDS = [
-  { name: 'new_home',    enabled: true  },
-  { name: 'checkout_v2', enabled: false },
-  { name: 'show_banner', enabled: true  },
+  { name: 'dark_mode',             enabled: false },
+  { name: 'new_version_available', enabled: false },
+  { name: 'show_promo_banner',     enabled: true  },
+  { name: 'show_buy_button',       enabled: true  },
 ];
 
 const CONFIG_SEEDS = [
-  { key: 'welcome_text', value: 'שלום',  type: 'string'  },
-  { key: 'max_items',    value: '10',    type: 'int'     },
-  { key: 'banner_text',  value: 'Welcome to ControlKit Demo!', type: 'string' },
+  { key: 'welcome_text',   value: 'ControlKit Store',                          type: 'string' },
+  { key: 'promo_text',     value: '🔥 Summer sale — up to 40% off!',           type: 'string' },
+  { key: 'update_message', value: 'Version 2.0 is here — faster and smoother.', type: 'string' },
+  { key: 'max_items',      value: '8',                                         type: 'int'    },
 ];
 
 async function ensureProject() {

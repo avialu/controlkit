@@ -18,14 +18,22 @@ class DemoApplication : Application() {
             // anyone tapping Refresh. Tune lower for talks, higher for prod.
             refreshIntervalMillis = 5_000L,
             defaults = ControlKitDefaults(
+                // Four feature flags, each with an obvious on-screen effect:
+                //   dark_mode             -> flips the whole app to a dark theme
+                //   new_version_available -> shows an "Update available" prompt
+                //   show_promo_banner     -> shows the marketing banner
+                //   show_buy_button       -> shows a "Buy" button on each product
                 features = mapOf(
-                    "new_home" to false,
-                    "show_banner" to false,
+                    "dark_mode" to false,
+                    "new_version_available" to false,
+                    "show_promo_banner" to false,
+                    "show_buy_button" to false,
                 ),
                 config = mapOf(
-                    "welcome_text" to "Hello!",
-                    "max_items" to 5,
-                    "banner_text" to "",
+                    "welcome_text" to "ControlKit Store",
+                    "promo_text" to "",
+                    "update_message" to "A new version is available.",
+                    "max_items" to 6,
                 ),
             ),
         )

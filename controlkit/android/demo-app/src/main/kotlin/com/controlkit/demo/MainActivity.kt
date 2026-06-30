@@ -18,6 +18,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.controlkit.demo.ui.DebugScreen
+import com.controlkit.demo.ui.DemoTheme
 import com.controlkit.demo.ui.HomeScreen
 import com.controlkit.sdk.ControlKit
 import kotlinx.coroutines.launch
@@ -27,11 +28,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-                    DemoApp()
-                }
-            }
+            DemoApp()
         }
     }
 }
@@ -42,9 +39,13 @@ private fun DemoApp() {
     val scope = rememberCoroutineScope()
 
     // Subscribe to the SDK's version flow. Every time the SDK swaps the in-memory
-    // document — manual fetch OR the 30 s background poll — `version` updates and
+    // document — manual fetch OR the background poll — `version` updates and
     // every `remember(version) { ... }` below re-reads the latest values.
     val version by ControlKit.configVersion.collectAsStateWithLifecycle()
+
+    // `dark_mode` flips the whole app theme, so it has to be read here, above the
+    // theme wrapper, rather than inside an individual screen.
+    val darkMode = remember(version) { ControlKit.isEnabled("dark_mode", false) }
 
     var refreshing by remember { mutableStateOf(false) }
     var lastError by remember { mutableStateOf<String?>(null) }
@@ -65,24 +66,28 @@ private fun DemoApp() {
         }
     }
 
-    NavHost(navController = nav, startDestination = "home") {
-        composable("home") {
-            HomeScreen(
-                version = version,
-                refreshing = refreshing,
-                lastError = lastError,
-                onRefresh = onRefresh,
-                onOpenDebug = { nav.navigate("debug") },
-            )
-        }
-        composable("debug") {
-            DebugScreen(
-                version = version,
-                refreshing = refreshing,
-                lastError = lastError,
-                onRefresh = onRefresh,
-                onBack = { nav.popBackStack() },
-            )
+    DemoTheme(darkMode = darkMode) {
+        Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            NavHost(navController = nav, startDestination = "home") {
+                composable("home") {
+                    HomeScreen(
+                        version = version,
+                        refreshing = refreshing,
+                        lastError = lastError,
+                        onRefresh = onRefresh,
+                        onOpenDebug = { nav.navigate("debug") },
+                    )
+                }
+                composable("debug") {
+                    DebugScreen(
+                        version = version,
+                        refreshing = refreshing,
+                        lastError = lastError,
+                        onRefresh = onRefresh,
+                        onBack = { nav.popBackStack() },
+                    )
+                }
+            }
         }
     }
 }

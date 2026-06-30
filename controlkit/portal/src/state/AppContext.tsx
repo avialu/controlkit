@@ -80,7 +80,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     try {
       const list = await api.listProjects();
       setProjects(list);
-      if (!selectedProjectId && list.length > 0) {
+      // Fall back to the first project when nothing is selected yet, OR when the
+      // persisted selection no longer exists (e.g. the DB was reseeded and the
+      // project IDs changed). Otherwise the portal keeps querying a dead project
+      // and shows no environments or flags.
+      const stillExists = !!selectedProjectId && list.some((p) => p.id === selectedProjectId);
+      if (!stillExists && list.length > 0) {
         setSelected(list[0].id);
         localStorage.setItem(LS_PROJECT, list[0].id);
       }

@@ -27,16 +27,16 @@ ControlKit.init(
     environment = "production",
     baseUrl     = "http://10.0.2.2:4000",
     defaults    = ControlKitDefaults(
-        features = mapOf("show_banner" to false),
-        config   = mapOf("welcome_text" to "Hello", "max_items" to 10),
+        features = mapOf("show_promo_banner" to false),
+        config   = mapOf("welcome_text" to "ControlKit Store", "max_items" to 6),
     ),
 )
 
 lifecycleScope.launch { ControlKit.fetch() }
 
-val showBanner = ControlKit.isEnabled("show_banner", defaultValue = false)
-val welcome    = ControlKit.getString("welcome_text", "Hello")
-val maxItems   = ControlKit.getInt("max_items", 10)
+val showPromo = ControlKit.isEnabled("show_promo_banner", defaultValue = false)
+val welcome   = ControlKit.getString("welcome_text", "ControlKit Store")
+val maxItems  = ControlKit.getInt("max_items", 6)
 val themeJson  = ControlKit.getJson("theme")
 ControlKit.refresh() // fire-and-forget
 ```
@@ -44,7 +44,10 @@ ControlKit.refresh() // fire-and-forget
 ### Behavior
 
 - On `init`, the local SharedPreferences cache is loaded synchronously, so the first reads after a relaunch already see real data.
-- A periodic background refresh (15 min) starts after `init`.
+- Two background refreshers start after `init`:
+  - an **in-process coroutine timer** (`refreshIntervalMillis`, default 15 min — the demo overrides it to 5 s) for fast updates while the app is alive; pass `0` to disable it.
+  - a **WorkManager** periodic job (`persistentRefreshMinutes`, default 30 min, clamped to WorkManager's 15-min minimum) that keeps the cache fresh even after the process is killed, so the next launch finds recent data. Pass `enablePersistentRefresh = false` to skip it (handy in tests).
+- The SDK serves the latest **published** config from the backend — draft edits in the portal aren't fetched until they're published.
 - `fetch()` is a `suspend` function. Network errors are thrown to the caller. The in-memory document and cache stay intact, so the app keeps working with the last good config.
 - Missing keys fall back to the per-app `defaults` provided to `init` (and then to the per-call `defaultValue`).
 
@@ -52,11 +55,12 @@ ControlKit.refresh() // fire-and-forget
 
 1. App launches → `DemoApplication.onCreate` calls `ControlKit.init(...)`.
 2. The cached config (if any) is loaded immediately. The home screen renders.
-3. The user taps **Refresh** → `ControlKit.fetch()` runs, the in-memory config is updated, and the screen recomposes:
-   - `welcome_text` shows up as the headline.
-   - The banner appears/disappears based on the `show_banner` flag.
-   - The layout swaps between **OldHome** (list) and **NewHome** (grid) based on the `new_home` flag.
-   - The list/grid size is capped at the `max_items` config value.
+3. The user taps **Refresh** (or the background poll fires) → `ControlKit.fetch()` runs, the in-memory config is updated, and the screen recomposes. Four feature flags each map to one obvious visual change:
+   - `dark_mode` → the whole app switches between light and dark themes.
+   - `new_version_available` → an "Update available" prompt appears at the top (copy from `update_message`).
+   - `show_promo_banner` → a marketing banner appears (copy from `promo_text`).
+   - `show_buy_button` → a "Buy" button is shown on every product card.
+   - `welcome_text` is the store headline; `max_items` caps how many products are listed.
 4. The **Debug** screen shows the raw JSON document and the current config version.
 
 ## Module layout
@@ -78,7 +82,9 @@ android/
         ConfigParser.kt
         ConfigCache.kt
         NetworkClient.kt
-        BackgroundRefresher.kt
+        BackgroundRefresher.kt          # in-process polling timer
+        ConfigRefreshWorker.kt          # WorkManager job (survives process death)
+        PersistedInitConfig.kt          # init params saved for the worker
 
   demo-app/
     build.gradle.kts                 # application module, depends on :controlkit-sdk
@@ -88,11 +94,13 @@ android/
         DemoApplication.kt           # ControlKit.init() lives here
         MainActivity.kt              # Compose nav: home → debug
         ui/
-          HomeScreen.kt              # routes between OldHome / NewHome based on `new_home`
-          OldHome.kt                 # list variant
-          NewHome.kt                 # grid variant
+          HomeScreen.kt              # storefront; reads the four flags + config
+          Products.kt                # static product catalog
+          ProductCard.kt             # product row + optional Buy button
+          Banner.kt                  # promo banner (show_promo_banner)
+          UpdatePrompt.kt            # "Update available" prompt (new_version_available)
+          Theme.kt                   # light/dark color schemes (dark_mode)
           DebugScreen.kt             # raw JSON + version + refresh
-          Banner.kt
       res/values/{strings,themes}.xml
 ```
 
