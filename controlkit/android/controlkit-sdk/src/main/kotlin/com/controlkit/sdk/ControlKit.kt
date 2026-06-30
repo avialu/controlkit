@@ -5,7 +5,9 @@ import android.util.Log
 import com.controlkit.sdk.internal.BackgroundRefresher
 import com.controlkit.sdk.internal.ConfigCache
 import com.controlkit.sdk.internal.ConfigDocument
+import com.controlkit.sdk.internal.ConfigRefreshWorker
 import com.controlkit.sdk.internal.NetworkClient
+import com.controlkit.sdk.internal.PersistedInitConfig
 import com.controlkit.sdk.internal.toJson
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -33,7 +35,11 @@ object ControlKit {
     private const val TAG = "ControlKit"
     const val DEFAULT_REFRESH_INTERVAL_MS: Long = 15L * 60L * 1000L
 
+    /** Default cadence (in minutes) for the persistent WorkManager job. */
+    private const val DEFAULT_PERSISTENT_REFRESH_MINUTES: Long = 30L
+
     @Volatile private var initialized: Boolean = false
+    private var appContext: Context? = null
 
     /**
      * Holds the latest config document. Wrapped in a StateFlow so the SDK
@@ -69,13 +75,22 @@ object ControlKit {
      * Initialise the SDK. Safe to call multiple times — subsequent calls are no-ops
      * unless [reset] was invoked first.
      *
-     * @param context              any Context; only the application context is retained.
-     * @param apiKey               the API key generated in the portal.
-     * @param environment          must match the environment the API key was issued for.
-     * @param baseUrl              backend root, e.g. "http://10.0.2.2:4000" for the Android emulator.
-     * @param defaults             optional defaults used before the first successful fetch / cache load.
-     * @param refreshIntervalMillis how often the SDK should poll the backend in the background.
-     *                              Pass 0 to disable background polling. Defaults to 15 minutes.
+     * The SDK runs TWO refresh mechanisms in parallel:
+     *   1. An in-process coroutine timer driven by [refreshIntervalMillis] — keeps
+     *      data fresh while the app is alive, supports short intervals (e.g. 30s
+     *      for a snappy demo).
+     *   2. A WorkManager periodic job that survives the app being killed and
+     *      respects battery/network constraints. Its interval is clamped to
+     *      WorkManager's 15-minute minimum.
+     *
+     * @param context                  any Context; only the application context is retained.
+     * @param apiKey                   the API key generated in the portal.
+     * @param environment              must match the environment the API key was issued for.
+     * @param baseUrl                  backend root, e.g. "http://10.0.2.2:4000" for the Android emulator.
+     * @param defaults                 optional defaults used before the first successful fetch / cache load.
+     * @param refreshIntervalMillis    how often the in-process timer polls. Pass 0 to disable.
+     * @param enablePersistentRefresh  set false to skip scheduling the WorkManager job (useful in tests).
+     * @param persistentRefreshMinutes WorkManager interval; min 15.
      */
     @JvmStatic
     @JvmOverloads
@@ -86,15 +101,25 @@ object ControlKit {
         baseUrl: String,
         defaults: ControlKitDefaults = ControlKitDefaults(),
         refreshIntervalMillis: Long = DEFAULT_REFRESH_INTERVAL_MS,
+        enablePersistentRefresh: Boolean = true,
+        persistentRefreshMinutes: Long = DEFAULT_PERSISTENT_REFRESH_MINUTES,
     ) {
         require(apiKey.isNotBlank()) { "apiKey must not be blank" }
         require(baseUrl.isNotBlank()) { "baseUrl must not be blank" }
 
         if (initialized) return
 
+        val app = context.applicationContext
+        this.appContext = app
         this.defaults = defaults
-        this.cache = ConfigCache(context, environment)
+        this.cache = ConfigCache(app, environment)
         this.network = NetworkClient(baseUrl = baseUrl, apiKey = apiKey, environment = environment)
+
+        // Persist init params so ConfigRefreshWorker can run after process death.
+        PersistedInitConfig.save(
+            app,
+            PersistedInitConfig(apiKey = apiKey, baseUrl = baseUrl, environment = environment),
+        )
 
         cache.load()?.let { updateDocument(it) }
 
@@ -102,6 +127,10 @@ object ControlKit {
 
         refresher = BackgroundRefresher(intervalMillis = refreshIntervalMillis).also {
             it.start { runCatching { fetchInternal() } }
+        }
+
+        if (enablePersistentRefresh) {
+            ConfigRefreshWorker.schedule(app, intervalMinutes = persistentRefreshMinutes)
         }
     }
 
@@ -177,6 +206,11 @@ object ControlKit {
     fun reset() {
         refresher?.stop()
         refresher = null
+        appContext?.let {
+            ConfigRefreshWorker.cancel(it)
+            PersistedInitConfig.clear(it)
+        }
+        appContext = null
         initialized = false
         _document.value = ConfigDocument.EMPTY
         _configVersion.value = 0

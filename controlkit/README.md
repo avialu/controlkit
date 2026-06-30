@@ -83,6 +83,7 @@ Other useful targets: `make help`, `make migrate`, `make seed`, `make reset`, `m
 - **Per-environment version.** Any flag/config mutation bumps `config_versions` for the affected environment. The SDK exposes `ControlKit.version()` so future work can decide whether to skip a fetch.
 - **Audit everywhere.** Every mutation goes through `auditService.record` — the audit log is complete by construction.
 - **Cache-first SDK.** On `init` the SDK loads its SharedPreferences cache synchronously. The very first read after a relaunch already returns real data; the network is only a freshness mechanism.
+- **Two-layer background refresh.** The SDK runs an in-process coroutine timer (configurable, demo uses 30 s) for snappy foreground updates, and on top of that schedules a WorkManager `PeriodicWorkRequest` that survives the app process being killed. The worker reads persisted init params from SharedPreferences and writes a fresh cache so the next launch sees recent data immediately. WorkManager's 15-minute minimum is respected; the in-process timer covers anything faster.
 - **No premature auth.** Portal endpoints are unauthenticated and the portal passes a `userName` field with every write so audit logs are still meaningful. A real auth layer is a clean follow-up.
 
 ## MVP scope — explicitly out of scope
