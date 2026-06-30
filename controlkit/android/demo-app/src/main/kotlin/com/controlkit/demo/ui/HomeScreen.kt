@@ -40,6 +40,7 @@ fun HomeScreen(
     val showUpdate    = remember(version) { ControlKit.isEnabled("new_version_available", false) }
     val showPromo     = remember(version) { ControlKit.isEnabled("show_promo_banner", false) }
     val showBuyButton = remember(version) { ControlKit.isEnabled("show_buy_button", false) }
+    val showRatings   = remember(version) { ControlKit.isEnabled("show_ratings", false) }
 
     val welcomeText   = remember(version) { ControlKit.getString("welcome_text", "ControlKit Store") }
     val promoText     = remember(version) { ControlKit.getString("promo_text", "") }
@@ -81,7 +82,11 @@ fun HomeScreen(
             }
 
             items(products) { product ->
-                ProductCard(product = product, showBuyButton = showBuyButton)
+                ProductCard(
+                    product = product,
+                    showBuyButton = showBuyButton,
+                    showRating = showRatings,
+                )
             }
         }
 

@@ -26,7 +26,7 @@ import androidx.compose.ui.unit.dp
  * rendered, demonstrating a flag that toggles an interactive UI element.
  */
 @Composable
-fun ProductCard(product: Product, showBuyButton: Boolean) {
+fun ProductCard(product: Product, showBuyButton: Boolean, showRating: Boolean) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -66,6 +66,14 @@ fun ProductCard(product: Product, showBuyButton: Boolean) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                if (showRating) {
+                    Text(
+                        text = "⭐ ${product.rating}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 2.dp),
+                    )
+                }
             }
 
             Column(horizontalAlignment = Alignment.End) {

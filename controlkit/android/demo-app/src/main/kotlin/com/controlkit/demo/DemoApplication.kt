@@ -23,11 +23,13 @@ class DemoApplication : Application() {
                 //   new_version_available -> shows an "Update available" prompt
                 //   show_promo_banner     -> shows the marketing banner
                 //   show_buy_button       -> shows a "Buy" button on each product
+                //   show_ratings          -> shows a ⭐ rating on each product
                 features = mapOf(
                     "dark_mode" to false,
                     "new_version_available" to false,
                     "show_promo_banner" to false,
                     "show_buy_button" to false,
+                    "show_ratings" to false,
                 ),
                 config = mapOf(
                     "welcome_text" to "ControlKit Store",
